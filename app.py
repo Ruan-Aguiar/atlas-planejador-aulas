@@ -241,7 +241,7 @@ else:
 
                     st.success("Planejamento gerado com sucesso!")
                     st.markdown("<br>", unsafe_allow_html=True)
-                    st.markdown(f'<div class="resultado-box">{planejamento}</div>', unsafe_allow_html=True)
+                    st.markdown(planejamento)
 
                     # Botão de download
                     nome_arquivo = f"planejamento_{tema.strip().replace(' ', '_')}.txt"
