@@ -1,18 +1,14 @@
 import streamlit as st
-import google.generativeai as genai
+from groq import Groq
 from dotenv import load_dotenv
 import os
 
-# Carrega a chave do arquivo .env
+# Carrega a chave do arquivo .env (local) ou dos Secrets do Streamlit (online)
 load_dotenv()
-api_key = os.getenv("GEMINI_API_KEY")
+api_key = os.getenv("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY", None)
 
-# Configura o Gemini
-genai.configure(api_key=api_key)
-model = genai.GenerativeModel(
-    model_name="gemini-1.5-flash",
-    system_instruction="Você é um assistente pedagógico especializado em criação de planejamentos de aula claros, objetivos e alinhados à BNCC."
-)
+# Configura o Groq
+client = Groq(api_key=api_key) if api_key else None
 
 # ── Configuração da página ──────────────────────────────────────────────────
 st.set_page_config(
@@ -234,8 +230,14 @@ else:
                     - Encerramento / Reflexão
                     """
 
-                    resposta = model.generate_content(prompt)
-                    planejamento = resposta.text
+                    resposta = client.chat.completions.create(
+                        model="llama-3.3-70b-versatile",
+                        messages=[
+                            {"role": "system", "content": "Você é um assistente pedagógico especializado em criação de planejamentos de aula claros, objetivos e alinhados à BNCC."},
+                            {"role": "user", "content": prompt}
+                        ]
+                    )
+                    planejamento = resposta.choices[0].message.content
 
                     st.success("Planejamento gerado com sucesso!")
                     st.markdown("<br>", unsafe_allow_html=True)
