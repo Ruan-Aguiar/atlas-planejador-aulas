@@ -491,4 +491,147 @@ with aba_plano:
                     instrucoes_disc = INSTRUCOES_POR_DISCIPLINA.get(disciplina, "")
 
                     prompt = f"""
-Monte um planejamento de aula detalhado com base nas seguintes infor
+Monte um planejamento de aula detalhado com base nas seguintes informações:
+
+Área do Conhecimento: {area}
+Disciplina: {disciplina}
+Tema: {tema}
+Série/Ano: {serie}
+Duração: {duracao} minutos
+Habilidades/BNCC: {habilidades if habilidades.strip() else "Não especificado"}
+
+Instruções específicas para esta área:
+{instrucoes_area}
+
+Instruções específicas para esta disciplina:
+{instrucoes_disc}
+
+Estruture o planejamento nos seguintes tópicos:
+- Objetivos
+- Conteúdos
+- Metodologia
+- Recursos Didáticos
+- Avaliação
+- Encerramento / Reflexão
+"""
+                    planejamento = chamar_groq(
+                        "Você é um assistente pedagógico especializado em criação de planejamentos de aula claros, objetivos e alinhados à BNCC.",
+                        prompt
+                    )
+
+                    st.session_state.planejamento_atual = planejamento
+                    st.session_state.dados_atuais = {
+                        "tema": tema, "serie": serie, "area": area,
+                        "disciplina": disciplina, "duracao": duracao
+                    }
+
+                    # Salva no histórico
+                    st.session_state.historico.insert(0, {
+                        "tema": tema,
+                        "serie": serie,
+                        "disciplina": disciplina,
+                        "area": area,
+                        "texto": planejamento
+                    })
+                    # Mantém só os últimos 10
+                    st.session_state.historico = st.session_state.historico[:10]
+
+        # Exibe planejamento gerado
+        if st.session_state.planejamento_atual:
+            st.success("Planejamento gerado com sucesso!")
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown(st.session_state.planejamento_atual)
+            st.divider()
+
+            # Botões de download
+            d = st.session_state.dados_atuais
+            nome_base = d.get("tema", "planejamento").replace(" ", "_")
+
+            col_dl1, col_dl2 = st.columns(2)
+
+            with col_dl1:
+                st.download_button(
+                    label="⬇️ Baixar como .txt",
+                    data=st.session_state.planejamento_atual,
+                    file_name=f"planejamento_{nome_base}.txt",
+                    mime="text/plain"
+                )
+
+            with col_dl2:
+                if st.button("📊 Gerar Apresentação PPTX", key="gerar_pptx"):
+                    with st.spinner("Montando a apresentação..."):
+                        buf = gerar_pptx_do_plano(
+                            tema=d.get("tema", ""),
+                            serie=d.get("serie", ""),
+                            area=d.get("area", ""),
+                            disciplina=d.get("disciplina", ""),
+                            planejamento_texto=st.session_state.planejamento_atual
+                        )
+                        st.download_button(
+                            label="⬇️ Baixar Apresentação .pptx",
+                            data=buf,
+                            file_name=f"apresentacao_{nome_base}.pptx",
+                            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                            key="dl_pptx"
+                        )
+                    st.success("Apresentação gerada! Clique acima para baixar.")
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ABA 2 — REPAGINAR APRESENTAÇÃO
+# ══════════════════════════════════════════════════════════════════════════════
+with aba_repaginar:
+    st.markdown("""
+    <div class="boas-vindas">
+        🎨 <strong>Repaginar Apresentação</strong><br><br>
+        Envie uma apresentação <strong>.pptx</strong> existente e o ATLAS vai reorganizá-la
+        com um visual mais dinâmico e fácil de entender — mantendo todo o conteúdo do professor.
+    </div>
+    """, unsafe_allow_html=True)
+
+    arquivo = st.file_uploader(
+        "Envie sua apresentação (.pptx)",
+        type=["pptx"],
+        help="Apenas arquivos .pptx por enquanto"
+    )
+
+    if arquivo:
+        st.info(f"📎 Arquivo recebido: **{arquivo.name}**")
+
+        if st.button("🎨 Repaginar Apresentação", key="btn_repaginar"):
+            if not api_key:
+                st.error("Chave da API não encontrada.")
+            else:
+                with st.spinner("Analisando e repaginando... isso pode levar alguns segundos."):
+                    bytes_arquivo = arquivo.read()
+                    buf = repaginar_pptx(bytes_arquivo, arquivo.name)
+
+                    if buf:
+                        nome_saida = arquivo.name.replace(".pptx", "_repaginada.pptx")
+                        st.download_button(
+                            label="⬇️ Baixar Apresentação Repaginada",
+                            data=buf,
+                            file_name=nome_saida,
+                            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                            key="dl_repaginada"
+                        )
+                        st.success("Pronto! A apresentação foi repaginada mantendo o conteúdo do professor.")
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ABA 3 — HISTÓRICO
+# ══════════════════════════════════════════════════════════════════════════════
+with aba_historico:
+    st.markdown("### 📋 Planejamentos desta sessão")
+
+    if not st.session_state.historico:
+        st.info("Nenhum planejamento gerado ainda nesta sessão.")
+    else:
+        for i, item in enumerate(st.session_state.historico):
+            with st.expander(f"📄 {item['tema']} — {item['serie']} ({item['disciplina']})"):
+                st.markdown(item["texto"])
+                st.download_button(
+                    label="⬇️ Baixar este planejamento",
+                    data=item["texto"],
+                    file_name=f"planejamento_{item['tema'].replace(' ', '_')}.txt",
+                    mime="text/plain",
+                    key=f"dl_hist_{i}"
+                )
